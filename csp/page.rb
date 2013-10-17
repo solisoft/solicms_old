@@ -1,34 +1,19 @@
 # [solicms] page.rb
 # Author: Olivier BONNAURE
+t1 = Time.now # measuring time
 
 file = "home" # Default page must be defined
 @lang = "en" # Default language must be defined too
+langs = ["en", "fr"] # define language used for this website
+website = "soliCMS" # set default website's name
 
-t1 = Time.now # measuring time
-
-@site_path = ENV["PATH_TRANSLATED"].split("/")[0..-2].join("/")
-@www = "#{@site_path}/www/"
-k = ""
-@params = {}
-
-# Get arguments
-ARGV.each do|a|
-  if a.split("=").size > 1    
-    a = a.split("=")
-    @params[a[0]] = a[1]
-  else
-    if k == ""      
-      k = a
-    else
-      @params[k] = a
-      k = ""
-    end
-  end
-end
-@params["page"] ||= 1
-@layout = ""
+############################################################################################
+############################################################################################
+############################################################################################
 
 # analyze_template(filename)
+# this method load a .soli file and read line by line
+# It will create css or js files and get content
 def analyze_template(filename)
   tmp = ""
   collect = { :data => false, :css => false, :js => false }
@@ -102,6 +87,8 @@ def analyze_template(filename)
   end
 end
 
+# convert_inclusions analyse the @layout and replace basic tags such as
+# load, date, active and lang for now.
 def convert_inclusions
   reload = false
   @layout.scan(/{{(.+)}}/i).each do |i|
@@ -119,9 +106,11 @@ def convert_inclusions
       @layout.gsub!("{{#{i[0]}}}", @lang)
     end
   end
-  convert_inclusions if reload
+  convert_inclusions if reload # reload it if necessary (when load was called at least once)
 end
 
+# convert widget analyze @layout and search about any {{widget ...}} 
+# to dynamically replace by html content
 def convert_widget
   widgets = @layout.scan /{{widget\s+([\w|=\d;@]+)}}/i
   widgets.each do |w|
@@ -178,6 +167,8 @@ def convert_widget
   end
 end
 
+# generate_template is called via convert_widget
+# It will analyze all the widget contents and transform keys as proper value
 def generate_template(template, path, options, index)
   collect = {}
   rub = ""
@@ -319,6 +310,10 @@ def generate_template(template, path, options, index)
   html
 end
 
+# paginate
+# display the pagination toolbar
+# each widget using a source will automaticaly have a pagination toolbar
+# TODO: add the possibility to hide it
 def paginate(options, length)
   html = ""
   if options["paginate"]
@@ -337,6 +332,9 @@ def paginate(options, length)
   html
 end
 
+
+# apply_transform apply some filters
+# TODO: add more filters like Capitalize, Upcase, Downcase, etc...
 def apply_transform(text, options)
   options.split(";").each do |o|
     o.scan(/truncate\((\d+)\)/i).each do |r|
@@ -348,23 +346,53 @@ def apply_transform(text, options)
   text
 end
 
+# archive_list
+# not used for now
 def archive_list(folder)
   # only return uniq date
   Dir.glob("#{@www}#{folder}/*").map {|l| l.split("/").last[0..5]}.uniq.sort.reverse
 end
 
-["en", "fr", "es", "de"].each do |l| # languages must be defined in config file
+############################################################################################
+############################################################################################
+############################################################################################
+
+# Get arguments
+# Urls are set like that : /!page/{lang}/{page}/{key1}/{val1}/...
+k = ""
+@params = {}
+ARGV.each do|a|
+  if a.split("=").size > 1    
+    a = a.split("=")
+    @params[a[0]] = a[1]
+  else
+    if k == ""      
+      k = a
+    else
+      @params[k] = a
+      k = ""
+    end
+  end
+end
+@params["page"] ||= 1 # set page to 1 as default
+@layout = "" # initialize the output
+
+@site_path = ENV["PATH_TRANSLATED"].split("/")[0..-2].join("/") # get path of application
+@www = "#{@site_path}/www/" # www app's directory
+
+langs.each do |l| # languages must be defined in config file
   if @params[l]
     @lang = l
     file = @params[l]
   end
 end
-if @params["reset"]
-  system "rm -Rf #{@www}cache/*"
-end
+
+system "rm -Rf #{@www}cache/*" if @params["reset"] # for debug purpose ... will be removed lately
+
 @filename = file.dup
 
-usecache = true
+usecache = true # to debug and avoid cache, set to false
+
 fileargs = @params.keys.map{|k| "#{k}-#{@params[k]}"}.join("-")
 if usecache and File.exists?("#{@www}cache/#{file}.#{@lang}-#{fileargs}.html.#{@params["page"]}")
   @layout = IO.read "#{@www}cache/#{file}.#{@lang}-#{fileargs}.html.#{@params["page"]}"
@@ -375,12 +403,10 @@ else
   Dir.mkdir "#{@www}cache/" rescue nil
   f = "#{@www}cache/#{file}.#{@lang}-#{fileargs}.html.#{@params["page"]}"
   IO.write f, @layout if usecache
-  #system("htmlminify -o #{f} #{f} &")
 end
 
-@layout.gsub! "<!-- #title -->", "soliCMS - #{@filename}"
+@layout.gsub! "<!-- #title -->", "#{website} - #{@filename}" # set default behavior
 @layout.gsub! "<!-- #debug -->", "Page Generated in : <strong>#{((Time.now - t1) * 1000 * 1000).round(2)} micro seconds</strong> - soliCMS powered \\o/ #{@params.inspect} - #{Time.now} -"
-puts @layout# + (params.inspect)
+puts @layout # debug information
 
-#puts "<p>#{params.inspect} #{ENV.inspect}  #{ENV["PATH_TRANSLATED"]}</p>"
 exit 200
