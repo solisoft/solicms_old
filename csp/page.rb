@@ -1,5 +1,9 @@
 # [solicms] page.rb
+# Version 0.1.1
 # Author: Olivier BONNAURE
+# TODO  : Convert to C script
+#       : Remove all system commands
+
 t1 = Time.now # measuring time
 
 file = "home" # Default page must be defined
@@ -59,6 +63,7 @@ def analyze_template(filename)
         Dir.mkdir "#{@www}cache/" rescue nil
         IO.write "#{@www}cache/#{name}.js", tmp unless File.exists? "#{@www}cache/#{name}.js"
         @layout.gsub!("<!-- :js -->", "<script src='/cache/#{name}.js'></script>")
+        #@layout.gsub!("<!-- :js -->", "<script>"+tmp+"</script>")
         tmp = ""
         collect[:js] = false
       end
@@ -105,6 +110,15 @@ def convert_inclusions
     if(i[0].split(" ").first == "lang")
       @layout.gsub!("{{#{i[0]}}}", @lang)
     end
+    if(i[0].split(" ").first == "loadTags")
+      model = i[0].split(" ").last
+      t = IO.read "#{@www}#{model}.tag" rescue ""
+      tags = ""
+      t.to_s.split(",").each do |tag|
+        tags += "<li><a href='/!page/#{@lang}/tags/by/#{tag.downcase.strip}'>#{tag.strip}</a></li>"
+      end
+      @layout.gsub!("{{loadTags #{model}}}", tags)
+    end
   end
   convert_inclusions if reload # reload it if necessary (when load was called at least once)
 end
@@ -144,7 +158,8 @@ def convert_widget
       basic_filter = "*.jpg" if @params["album"] # don't filter if album parameter is present
 
       if options["filter"] and options["filter"] != "off"
-        docs = Dir.glob("#{@www}#{options["source"]}/#{basic_filter}").map{|l| l if l =~ /#{@params[options["filter"]]}/ }.compact
+        docs = Dir.glob("#{@www}#{options["source"]}/#{basic_filter}").map{|l| l if l =~ /#{@params[options["filter"]]}/
+}.compact
       else
         docs = Dir.glob("#{@www}#{options["source"]}/#{basic_filter}")
       end
@@ -255,9 +270,15 @@ def generate_template(template, path, options, index)
 
   template.scan(/{{tags\s+([\w\.|\(\)\d;]+)}}/i).each do |a|
     text = []
+    t = IO.read "#{@www}#{options["model"]}.tag" rescue ""
+    t = t.to_s.strip.split ","
     collect[a[0].split("|").first.gsub("#{options["model"]}.", "")].split(",").each do |l|
-      text << "<a href='/!page/#{@lang}/tags/by/#{l.downcase.strip}'>#{l}</a>"
+      text << "<a href='/!page/#{@lang}/tags/by/#{l.downcase.strip}'>#{l.strip}</a>"
+      t << l.strip
     end
+    #html += "#{@www}#{options["model"]}.tag"
+    IO.write "#{@www}#{options["model"]}.tag", t.uniq.join(",").strip
+
     html.gsub! "{{tags #{a[0]}}}", text.join(", ")
   end
 
@@ -268,6 +289,8 @@ def generate_template(template, path, options, index)
   template.scan(/{{load\s+([\w\-_\.]+)}}/i).each do |a|
     html.gsub!("{{load #{a[0]}}}", IO.read(a[0])) if File.exists? a[0]
   end
+  
+
 
   template.scan(/{{gallery\s+([\w\.|\(\)\d;|\^=\:]+)}}/i).each_with_index do |a, i|
     imgOpts = {}
@@ -319,13 +342,16 @@ def paginate(options, length)
   if options["paginate"]
     html += options["paginate_before"].to_s
     tmp = options["paginate"].dup
-    html += tmp.gsub("{{nb}}", "&laquo;").gsub("{{page}}", "#{@params["page"].to_i - 1}").gsub("{{active}}", @params["page"].to_i == 1 ? "disabled" : "")
+    html += tmp.gsub("{{nb}}", "&laquo;").gsub("{{page}}", "#{@params["page"].to_i - 1}").gsub("{{active}}",
+@params["page"].to_i == 1 ? "disabled" : "")
     maxpage = 0
     (0..(length.to_i / options["limit"].to_i)).each do |page|
-      html += tmp.gsub("{{nb}}", "#{page.to_i + 1}").gsub("{{page}}", "#{page.to_i + 1}").gsub("{{active}}", (page + 1) == @params["page"].to_i ? "active" : "")
+      html += tmp.gsub("{{nb}}", "#{page.to_i + 1}").gsub("{{page}}", "#{page.to_i + 1}").gsub("{{active}}", (page + 1) ==
+@params["page"].to_i ? "active" : "")
       maxpage = page
     end
-    html += tmp.gsub("{{nb}}", "&raquo;").gsub("{{page}}", "#{@params["page"].to_i + 1}").gsub("{{active}}", @params["page"].to_i == maxpage + 1 ? "disabled" : "")
+    html += tmp.gsub("{{nb}}", "&raquo;").gsub("{{page}}", "#{@params["page"].to_i + 1}").gsub("{{active}}",
+@params["page"].to_i == maxpage + 1 ? "disabled" : "")
     
   end
   html += options["paginate_after"].to_s
@@ -406,7 +432,8 @@ else
 end
 
 @layout.gsub! "<!-- #title -->", "#{website} - #{@filename}" # set default behavior
-@layout.gsub! "<!-- #debug -->", "Page Generated in : <strong>#{((Time.now - t1) * 1000 * 1000).round(2)} micro seconds</strong> - soliCMS powered \\o/ #{@params.inspect} - #{Time.now} -"
+@layout.gsub! "<!-- #debug -->", "Page Generated in : <strong>#{((Time.now - t1) * 1000 * 1000).round(2)} micro seconds</strong>
+- soliCMS powered \\o/ #{@params.inspect} - #{Time.now} -"
 puts @layout # debug information
 
 exit 200
