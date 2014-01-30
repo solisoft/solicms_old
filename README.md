@@ -4,4 +4,4 @@ soliCMS is a free database CMS which focus on performances.
 
 ## Installation
 
-Todo
+We are waiting the latest GWAN 5.1 version to create an installation documentation. It should be released in February.
